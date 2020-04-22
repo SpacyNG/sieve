@@ -309,6 +309,9 @@
         e.preventDefault();
         console.dir(e.dataTransfer);
       });
+
+    $("#infobartoggle")
+      .click(function() { $("#infobar").toggle(); });
   }
 
   /**
@@ -321,19 +324,10 @@
    *   the line which caused the error
    *
    */
+  // eslint-disable-next-line no-unused-vars
   function errorhandler(msg, url, line) {
     // alert(msg+"\n"+url+"\n"+line);
     showInfoMessage(msg, "");
-  }
-
-  /**
-   * Checks if the current script has changed
-   *
-   * @returns {boolean}
-   *   true in case the script changed otherwise false.
-   */
-  function hasChanged() {
-    return true;
   }
 
   if (document.readyState !== 'loading')
@@ -344,6 +338,5 @@
   exports.onerror = errorhandler;
   exports.setSieveScript = setSieveScript;
   exports.getSieveScript = getSieveScript;
-  exports.hasChanged = hasChanged;
 
 })(window);

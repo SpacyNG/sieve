@@ -42,6 +42,14 @@
 
       this.tlsSocket = null;
       this._logger = logger;
+      this.secure = true;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    isSecure() {
+      return this.secure;
     }
 
 
@@ -137,7 +145,7 @@
      * @param {string} host
      *   The target hostname or IP address as String
      * @param {int} port
-     *   The target port as Interger
+     *   The target port as integer
      * @param {boolean} secure
      *   If true, a secure socket will be created. This allows switching to a secure
      *   connection.
@@ -186,11 +194,11 @@
       if (Array.isArray(options.fingerprints) === false)
         options.fingerprints = [options.fingerprints];
 
-      if (options.ignoreErrors === undefined || options.ignoreErrors === null || options.ignoreErrors === "")
-        options.ignoreErrors = [];
+      if (options.ignoreCertErrors === undefined || options.ignoreCertErrors === null || options.ignoreCertErrors === "")
+        options.ignoreCertErrors = [];
 
-      if (Array.isArray(options.ignoreErrors) === false)
-        options.ignoreErrors = [options.ignoreErrors];
+      if (Array.isArray(options.ignoreCertErrors) === false)
+        options.ignoreCertErrors = [options.ignoreCertErrors];
 
       await super.startTLS();
 
@@ -211,41 +219,58 @@
             // in case the fingerprint is not pinned we can skip right here.
             if (!options.fingerprints.length) {
               resolve();
-              this.getLogger().log('Socket upgraded! (Chain of Trust)');
+              this.getLogger().logState('Socket upgraded! (Chain of Trust)');
               return;
             }
 
-            // so let's check the if the server's fingerpint matches the pinned one.
+            // so let's check the if the server's fingerprint matches the pinned one.
             if (options.fingerprints.indexOf(cert.fingerprint) !== NOT_FOUND) {
               resolve();
-              this.getLogger().log('Socket upgraded! (Chain of Trust and pinned fingerprint)');
+              this.getLogger().logState('Socket upgraded! (Chain of Trust and pinned fingerprint)');
               return;
             }
 
+            const secInfo = {
+              host: this.host,
+              port: this.port,
+
+              fingerprint: cert.fingerprint,
+              fingerprint256 : cert.fingerprint256,
+
+              message: "Server fingerprint does not match pinned fingerprint"
+            };
+
             // If not we need to fail right here...
-            reject(new SieveCertValidationException(
-              new Error("Server fingerprint does not match pinned fingerprint"),
-              this.tlsSocket.getPeerCertificate(true)));
+            reject(new SieveCertValidationException(secInfo));
             return;
           }
 
           const error = this.tlsSocket.ssl.verifyError();
 
           // dealing with self signed certificates
-          if (options.ignoreErrors.indexOf(error.code) !== NOT_FOUND) {
+          if (options.ignoreCertErrors.indexOf(error.code) !== NOT_FOUND) {
 
             // Check if the fingerprint is well known...
             if (options.fingerprints.indexOf(cert.fingerprint) !== NOT_FOUND) {
               resolve();
 
-              this.getLogger().log('Socket upgraded! (Trusted Finger Print)');
+              this.getLogger().logState('Socket upgraded! (Trusted Finger Print)');
               return;
             }
           }
 
-          reject(new SieveCertValidationException(
-            this.tlsSocket.ssl.verifyError(),
-            this.tlsSocket.getPeerCertificate(true)));
+          const secInfo = {
+            host: this.host,
+            port: this.port,
+
+            fingerprint : cert.fingerprint,
+            fingerprint256 : cert.fingerprint256,
+
+            code : error.code,
+            message : error.message
+          };
+
+          reject(new SieveCertValidationException(secInfo));
 
           this.tlsSocket.destroy();
         });
@@ -261,7 +286,7 @@
 
       super.disconnect();
 
-      this.getLogger().log("Disconnecting...");
+      this.getLogger().logState("Disconnecting...");
       if (this.socket) {
         this.socket.destroy();
         this.socket.unref();
@@ -280,8 +305,6 @@
       this.getLogger().logState("Disconnected ...");
     }
 
-    // TODO detect server disconnects and communication errors...
-
     /**
      * Called when data was received and is ready to be processed.
      * @param {object} buffer
@@ -289,7 +312,7 @@
      */
     onReceive(buffer) {
 
-      this.getLogger().log('onDataRead (' + buffer.length + ')\n' + buffer.toString("utf8"));
+      this.getLogger().logState(`onDataRead (${buffer.length})`);
 
       const data = [];
 
@@ -304,6 +327,15 @@
      * @inheritdoc
      */
     onSend(data) {
+
+      if (this.getLogger().isLevelStream()) {
+        // Force String to UTF-8...
+        const output = Array.prototype.slice.call(
+          new Uint8Array(new TextEncoder("UTF-8").encode(data)));
+
+        this.getLogger().logStream(`Client -> Server [Byte Array]:\n${output}`);
+      }
+
       if (this.tlsSocket !== null) {
         this.tlsSocket.write(data, "utf8");
         return;

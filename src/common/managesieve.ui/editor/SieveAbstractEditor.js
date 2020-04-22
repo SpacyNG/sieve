@@ -13,6 +13,9 @@
 
   "use strict";
 
+  const HEX = 16;
+  const HEX_LENGTH = 2;
+
   /**
    * An abstract and generic sieve editor interface .
    */
@@ -22,17 +25,27 @@
      * Creates a new text editor UI.
      *
      * @param {SieveEditorController} controller
-     *   The controller which is assigne to this editor.
+     *   the controller which is assigned to this editor.
      */
     constructor(controller) {
       this.controller = controller;
-      this.changed = false;
     }
 
+    /**
+     * The controller implements an editors external interfaces and actions.
+     * It is typically shared between editors.
+     *
+     * @returns {SieveEditorController}
+     *   the  controller which assigned to this editor.
+     */
     getController() {
       return this.controller;
     }
 
+    /**
+     * Renders the current editor.
+     * @abstract
+     */
     async render() {
     }
 
@@ -43,6 +56,7 @@
      * @param {string} script
      *   the script
      */
+    // eslint-disable-next-line require-await
     async setScript(script) {
       throw new Error(`Implement setScript(${script})`);
     }
@@ -78,31 +92,35 @@
     }
 
     /**
-     * Returns the editor change status.
+     * Calculate the checksum for the current context script.
      *
-     * @returns {boolean}
-     *   true in case the document was changed otherwise false.
+     *  @returns {string}
+     *   the content scripts sha256 checksum.
      */
-    hasChanged() {
-      return this.changed;
+    async getChecksum() {
+
+      const digest = await crypto.subtle.digest('SHA-256',
+        new TextEncoder().encode(await this.getScript()));
+
+      return Array.from(new Uint8Array(digest)).map(
+        (b) => { return b.toString(HEX).padStart(HEX_LENGTH, '0'); }).join('');
     }
 
     /**
-     * Sets the editors change status
-     * @param {boolean} value
-     *   if true the editor status is set to changed otherwise unchanged.
+     * Loads the editors settings.
      */
-    setChanged(value) {
-
-      if (this.changed !== value)
-        this.controller.onChanged(value);
-
-      this.changed = value;
+    async loadSettings() {
     }
 
+    /**
+     * Resets the editor to default settings
+     */
     async loadDefaultSettings() {
     }
 
+    /**
+     * Save the current settings as default.
+     */
     async saveDefaultSettings() {
     }
 

@@ -13,6 +13,10 @@
 
   "use strict";
 
+  const { SieveLogger } = require("./SieveLogger.js");
+
+  const { Sieve } = require("./SieveClient.js");
+
   const {
     SieveSaslPlainRequest,
     SieveSaslLoginRequest,
@@ -39,7 +43,8 @@
     SieveClientException,
     SieveServerException,
     SieveReferralException,
-    SieveTimeOutException
+    SieveTimeOutException,
+    SieveCertValidationException
   } = require("./SieveExceptions.js");
 
   const FIRST_ELEMENT = 0;
@@ -47,76 +52,76 @@
 
   /**
    * This class realizes a manage sieve connection to a remote server.
-   * It provides the logic for login, logout, hartbeats, watchdogs and
+   * It provides the logic for login, logout, heartbeats, watchdogs and
    * much more.
    *
    * It is save to have concurrent call within a session. The sieve backend
    * uses a queue to process them. So you don't need to worry about using
    * stuff in parallel.
    *
-   * It is higly async but uses the ES6 await syntax, which makes it behave
-   * like a synchonous api.
+   * It is highly async but uses the ES6 await syntax, which makes it behave
+   * like a synchronous api.
    */
   class SieveAbstractSession {
 
     /**
      * Creates a new Session instance.
-     * @param {SieveAccount} account
-     *   an reference to a sieve account. this is needed to obtain login informations.
-     * @param {SieveLogger} logger
-     *   a logger instance.
+     *
+     * @param {string} id
+     *   the unique session id.
+     * @param {object.<string, object>} options
+     *   a dictionary with options as key/value pairs.
      */
-    constructor(account, logger) {
-      this.account = account;
-      this.logger = logger;
+    constructor(id, options) {
+      this.id = id;
+      this.options = options;
+      this.listeners = {};
+      this.sieve = null;
     }
 
     /**
-     * Returns the logger bount to this session.
+     * Returns the logger bound to this session.
+     * @abstract
      *
      * @returns {SieveLogger}
      *   a reference to the current logger
      */
     getLogger() {
+      if (!this.logger)
+        this.logger = new SieveLogger(this.id, this.getOption("logLevel"));
+
       return this.logger;
     }
 
     /**
      * Returns the sieve client bound to this session.
-     * @abstract
      *
      * @returns {SieveAbstractClient}
      *   a reference to the sieve client.
      */
     getSieve() {
-      throw new Error("Implement SieveAbstractSession::getSieve()");
+      return this.sieve;
     }
 
     /**
      * Creates a new sieve client for this session.
-     * @abstract
      */
     createSieve() {
-      throw new Error("Implement SieveAbstractSession::createSieve()");
+      if (this.sieve !== undefined && this.sieve !== null)
+        throw new SieveClientException("Sieve Connection Active");
+
+      this.sieve = new Sieve(this.getLogger());
     }
 
     /**
-     * Destroys the current sieve client for this session
-     * @abstract
-     */
-    destroySieve() {
-      throw new Error("Implement SieveAbstractSession::createSieve()");
-    }
-
-    /**
-     * The server may close our connection after beeing idle for too long.
+     * The server may close our connection after being idle for too long.
      * This can be prevented by sending regular keep alive packets.
      *
      * If supported the noop command is used otherwise a capability
      * request is used.
      */
     async onIdle() {
-      this.getLogger().logState("Sending keep alive packet...");
+      this.getLogger().logSession("Sending keep alive packet...");
       await this.noop();
     }
 
@@ -124,12 +129,13 @@
      * Binds the capabilities to the sieve object.
      *
      * @param {object} capabilities
-     *   a struct containing the capabilites.
+     *   a struct containing the capabilities.
      */
     setCapabilities(capabilities) {
 
       this.getSieve().setCompatibility(capabilities.getCompatibility());
 
+      // FIXME we should use a getter and setter...
       this.getSieve().capabilities = {
         tls: capabilities.getTLS(),
         extensions: capabilities.getExtensions(),
@@ -155,9 +161,9 @@
     /**
      * Normally the server returns more than one SASL Mechanism.
      * The list is sorted by the server. It starts with the most
-     * prefered mechanism and ends with the least prefered one.
+     * preferred mechanism and ends with the least preferred one.
      *
-     * This menas in case the user has forced a prefered mechanism.
+     * This means in case the user has forced a preferred mechanism.
      * We try to use this first. In case is is not supported by the server
      * or the user has no preference we start iterating though the advertised
      * mechanism until we find a matching one.
@@ -168,15 +174,20 @@
      * Note: In case we do not support any of the server's advertised
      * mechanism an exception is thrown.
      *
-     * @param {string} mechanism
+     * Note: LOGIN is deprecated, it is only used as very last resort.
+     *
+     * @param {string} [mechanism]
      *   the sasl mechanism which shall be used.
+     *   If omitted or set to "default" the most preferred which is supported
+     *   by client ans server is chosen.
+     *
      * @returns {SieveAbstractSaslRequest}
-     *  the sasl request which implements the most prefered compatible mechanism.
+     *  the sasl request which implements the most preferred compatible mechanism.
      */
     getSaslMechanism(mechanism) {
 
-      if (mechanism === "none")
-        throw new SieveClientException("SASL Authentication disabled");
+      if (mechanism === undefined || mechanism === null)
+        mechanism = "default";
 
       if (mechanism === "default")
         mechanism = [... this.getSieve().capabilities.sasl];
@@ -206,7 +217,7 @@
             // as suggested in the RFC, we use SASL LOGIN
             // only as last resort...
 
-            // this means in case it is the only mechnisms
+            // this means in case it is the only mechanism
             // we have no options
             if (!mechanism.length)
               return new SieveSaslLoginRequest();
@@ -222,31 +233,88 @@
     }
 
     /**
+     * Gets an configuration parameter from the session's options.
+     *
+     * @param {string} name
+     *   the option name.
+     * @param {Function} [fallback]
+     *   the optional fallback value, if not undefined is returned.
+     *
+     * @returns {object}
+     *   the option's value.
+     */
+    getOption(name, fallback) {
+      if (this.options[name] === null || this.options[name] === undefined)
+        return fallback;
+
+      return this.options[name];
+    }
+
+    /**
+     * Registers the callback listener for the given name.
+     * There can be at most one listener per name.
+     *
+     * To disable a listener just set the callback handler to null
+     * or undefined
+     *
+     * @param {string} name
+     *   the callback event name.
+     * @param {Function} [callback]
+     *   the callback function, if omitted the handler will be removed.
+     */
+    on(name, callback) {
+
+      if (name === "authenticate") {
+        this.listeners.onAuthenticate = callback;
+        return;
+      }
+
+      if (name === "authorize") {
+        this.listeners.onAuthorize = callback;
+        return;
+      }
+
+      if (name === "proxy") {
+        this.listeners.onProxyLookup = callback;
+        return;
+      }
+
+      if (name === "certerror") {
+        this.listeners.onCertError = callback;
+        return;
+      }
+
+      throw new SieveClientException(`Unknown callback handler ${name}`);
+    }
+
+    /**
      * The authentication starts for secure connections after
      * the tls handshake and for unencrypted connection directly
      * after the initial server response.
      *
-     * Please note after a successfull tls handshake the server
+     * Please note after a successful tls handshake the server
      * may update the SASL Mechanism. The server may force the user
      * to use TLS by providing initially an empty list of SASL
-     * Mechanisms. After a successfull tls handshake it then upgrades
+     * Mechanisms. After a successful tls handshake it then upgrades
      * the SASL Mechanisms.
      */
     async authenticate() {
-      const account = this.account;
-      const mechanism = account.getSecurity().getMechanism();
+
+      const mechanism = this.getOption("sasl", "default");
 
       if (mechanism === "none")
         return;
 
       const request = this.getSaslMechanism(mechanism);
 
-      request.setUsername(
-        account.getAuthentication().getUsername());
+      if (!this.listeners.onAuthenticate)
+        throw new SieveClientException("No Authentication handler registered");
 
-      // SASL External has no passwort it relies completely on SSL...
+      const authentication = await this.listeners.onAuthenticate(request.hasPassword());
+
+      // SASL External has no password it relies completely on SSL...
       if (request.hasPassword()) {
-        const password = await account.getAuthentication().getPassword();
+        const password = authentication.password;
 
         if (typeof (password) === "undefined" || password === null)
           throw new SieveClientException("error.authentication");
@@ -254,10 +322,16 @@
         request.setPassword(password);
       }
 
+      request.setUsername(authentication.username);
+
       // check if the authentication method supports proxy authorization...
       if (request.isAuthorizable()) {
+
+        if (!this.listeners.onAuthorize)
+          throw new SieveClientException("No Authorization handler registered");
+
         // ... if so retrieve the authorization identity
-        const authorization = account.getAuthorization().getAuthorization();
+        const authorization = await this.listeners.onAuthorize();
 
         if (typeof (authorization) === "undefined" || authorization === null)
           throw new SieveClientException("error.authorization");
@@ -278,7 +352,7 @@
      * In addition the implicit request we send an explicit
      * capability request.
      *
-     * A bug free server will return with two capability responsed
+     * A bug free server will return with two capability responses
      * while a buggy implementation returns only one.
      *
      * @param {object} [options]
@@ -286,24 +360,35 @@
      */
     async startTLS(options) {
 
-      if (!this.account.getSecurity().isSecure())
+      if (!this.getSieve().isSecure())
         return;
 
       if (!this.getSieve().capabilities.tls)
         throw new SieveClientException("Server does not support a secure connection.");
 
-      await this.sendRequest(new SieveStartTLSRequest(), false);
+      try {
+        await this.sendRequest(new SieveStartTLSRequest(), false);
 
-      await this.getSieve().startTLS(options);
+        await this.getSieve().startTLS(options);
 
-      // A bugfree server we endup with two capability request, one
-      // implicit after startTLS and one explicite from capbilites.
-      // So we have to consume one of them silently...
-      const capabilities = await this.sendRequest([
-        new SieveCapabilitiesRequest(),
-        new SieveInitRequest()], false);
+        // A bug free server we end up with two capability request, one
+        // implicit after startTLS and one explicit from capabilities.
+        // So we have to consume one of them silently...
+        const capabilities = await this.sendRequest([
+          new SieveCapabilitiesRequest(),
+          new SieveInitRequest()], false);
 
-      this.setCapabilities(capabilities);
+        this.setCapabilities(capabilities);
+
+      } catch (ex) {
+        // Upon a cert validation we emit a notification...
+        if (ex instanceof SieveCertValidationException)
+          if (this.listeners.onCertError)
+            this.listeners.onCertError(ex.getSecurityInfo());
+
+        // ... and then rethrow.
+        throw ex;
+      }
     }
 
     /**
@@ -318,7 +403,7 @@
      *   an optional init function which will be called directly after
      *   the first request was queued
      *
-     * @returns {SieveAbstractReponse}
+     * @returns {SieveAbstractResponse}
      *   the response for the first request or an exception in case of an error.
      */
     async promisify(request, init) {
@@ -347,7 +432,13 @@
         });
 
         request[FIRST_ELEMENT].addTimeoutListener((error) => {
-          reject(new SieveTimeOutException(error));
+
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          reject(new SieveTimeOutException("Request was canceled or took too long"));
         });
 
 
@@ -380,7 +471,7 @@
      *   an optional init function which will be called directly after
      *   the first request was queued
      *
-     * @returns {SieveAbstractReponse}
+     * @returns {SieveAbstractResponse}
      *   the response for the first request or an exception in case of an error.
      */
     async sendRequest(request, follow, init) {
@@ -394,18 +485,18 @@
       catch (ex) {
 
         if (!(ex instanceof SieveReferralException)) {
-          this.getLogger().logSession("Sending Request failed " + ex);
+          this.getLogger().logSession(`Sending Request failed ${ex}`);
           throw ex;
         }
 
         if (!follow) {
-          this.getLogger().logSession("Sending Request failed " + ex);
+          this.getLogger().logSession(`Sending Request failed ${ex}`);
           throw ex;
         }
 
         await this.disconnect(true);
 
-        this.getLogger().logSession("Referred to Server: " + ex.getHostname());
+        this.getLogger().logSession(`Referred to Server: ${ex.getHostname()}`);
         await this.connect(ex.getHostname(), ex.getPort());
 
         return await this.promisify(request, init);
@@ -414,35 +505,40 @@
 
 
     /**
-     * An internal method with wrapps connecting to the server.
+     * An internal method creating a server connection.
      *
-     * @param {string} [hostname]
+     * @param {string} hostname
      *   the sieve server's hostname
-     * @param {string} [port]
+     * @param {string} port
      *   the sieve server's port
+     * @returns {SieveSession}
+     *   a self reference
      */
     async connect(hostname, port) {
 
       if (typeof (hostname) === "undefined" || hostname === null)
-        hostname = this.account.getHost().getHostname();
+        throw new SieveClientException("No Hostname specified");
 
       if (typeof (port) === "undefined" || port === null)
-        port = this.account.getHost().getPort();
+        throw new SieveClientException("No Port specified");
 
       this.createSieve();
 
-      if (this.account.getSettings().isKeepAlive())
-        this.getSieve().setIdleWait(this.account.getSettings().getKeepAliveInterval());
+      this.getSieve().setIdleWait(this.getOption("keepAlive"));
 
       // TODO do we really need this? Or do we need this only for keep alive?
       this.getSieve().addListener(this);
 
+      let proxy = null;
+      if (this.listeners.onProxyLookup)
+        proxy = await this.listeners.onProxyLookup(hostname, port);
+
       const init = () => {
         this.getSieve().connect(
           hostname, port,
-          this.account.getSecurity().isSecure(),
+          this.getOption("secure", true),
           this,
-          this.account.getProxy().getProxyInfo());
+          proxy);
       };
 
       this.setCapabilities(
@@ -451,6 +547,8 @@
       await this.startTLS();
 
       await this.authenticate();
+
+      return this;
     }
 
     /**
@@ -475,14 +573,14 @@
         try {
           await this.logout();
         } catch (ex) {
-          this.getLogger().logSession("Graceful logout failed" + ex);
+          this.getLogger().logSession(`Graceful logout failed ${ex}`);
         }
       }
 
       // ... in case it failed for we do it the hard way
       if (this.getSieve()) {
         await this.getSieve().disconnect();
-        this.destroySieve();
+        this.sieve = null;
       }
 
       return this;
@@ -500,7 +598,7 @@
     /**
      * Renames a script.
      *
-     * It prefers the new rename command. In case it is not suppored it will
+     * It prefers the new rename command. In case it is not supported it will
      * use a get, put and delete sequence to emulate the rename command.
      *
      * So the result will be the very same, but there is one slight difference.
@@ -532,7 +630,7 @@
       }
 
       if (active === null)
-        throw new SieveClientException("Unknown Script " + oldName);
+        throw new SieveClientException(`Unknown Script ${oldName}`);
 
       // Get the script'S content and save is as a new file
       await this.putScript(newName,
@@ -595,7 +693,7 @@
      *   If omitted all script will be deactivated.
      *
      */
-    async setActiveScript(script) {
+    async activateScript(script) {
       await this.sendRequest(new SieveSetActiveRequest(script));
     }
 
@@ -639,7 +737,7 @@
 
     /**
      * Sends a noop or keep alive response.
-     * It is a request without sideeffect and without any
+     * It is a request without side effect and without any
      * payload. It is typically used to test if the server
      * is available and to prevent closing the connection to the server.
      *
@@ -664,7 +762,7 @@
      * In case of an error an exception will be thrown.
      *
      * @returns {object}
-     *   an object with the capabilies.
+     *   an object with the capabilities.
      */
     async capabilities() {
       return (await this.sendRequest(new SieveCapabilitiesRequest())).getDetails();

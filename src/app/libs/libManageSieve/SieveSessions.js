@@ -18,9 +18,9 @@
   /**
    * Manages Sieve session.
    *
-   * Sessions are identified by a uniue id.
+   * Sessions are identified by a unique id.
    * As the account id unique, it is typically
-   * used as ssession id.
+   * used as session id.
    */
   class SieveSessions {
 
@@ -60,6 +60,53 @@
     }
 
     /**
+     * Called when an authentication is needed
+     *
+     * @param {SieveAccount} account
+     *   the account which should be authenticated.
+     * @param {boolean} hasPassword
+     *   true if the password is needed otherwise false.
+     * @returns {object}
+     *   an object the the username and optionally the password.
+     */
+    async onAuthenticate(account, hasPassword) {
+
+      const authentication = {};
+
+      authentication.username = await (await account.getAuthentication()).getUsername();
+
+      if (hasPassword)
+        authentication.password = await (await account.getAuthentication()).getPassword();
+
+      return authentication;
+    }
+
+    /**
+     * Called when an authorization is needed.
+     *
+     * @param {SieveAccount} account
+     *   the account which should be authorized.
+     * @returns {string}
+     *   the user name to be authorized as or an empty string.
+     */
+    async onAuthorize(account) {
+      return await (await account.getAuthorization()).getAuthorization();
+    }
+
+    /**
+     * Called when a proxy lookup is needed.
+     *
+     * @param {SieveAccount} account
+     *   the current account.
+     * @returns {object}
+     *   the proxy information.
+     */
+    async onProxyLookup(account) {
+      return await account.getProxy().getProxyInfo();
+    }
+
+
+    /**
      * Creates a new session for the given id.
      * In case the session id is in use. It will
      * terminate the connection, and recreate a
@@ -71,9 +118,30 @@
      *   the account with the session's configuration
      */
     async create(id, account) {
-      if (await this.destroy(id));
 
-      this.sessions.set(id, new SieveSession(account, "sid2"));
+      await this.destroy(id);
+
+      const host = await account.getHost();
+      const security = await account.getSecurity();
+      const settings = await account.getSettings();
+
+      const options = {
+        secure : await security.isSecure(),
+        sasl : await security.getMechanism(),
+        keepAlive : await host.getKeepAlive(),
+        logLevel : await settings.getLogLevel(),
+        certFingerprints : await host.getFingerprint(),
+        certIgnoreError : await host.getIgnoreCertErrors()
+      };
+
+      const session = new SieveSession(id, options);
+
+      // TODO move to app so that it can be shared with the wx implementation.
+      session.on("authenticate", async (hasPassword) => { return await this.onAuthenticate(account, hasPassword); });
+      session.on("authorize", async () => { return await this.onAuthorize(account); });
+      session.on("proxy", async (hostname, port) => { return await this.onProxyLookup(account, hostname, port); });
+
+      this.sessions.set(id, session);
     }
 
     /**
@@ -81,7 +149,7 @@
      * If active it will disconnect from the server.
      *
      * @param {string} id
-     *   the unque session id
+     *   the unique session id
      */
     async destroy(id) {
       if (this.has(id))

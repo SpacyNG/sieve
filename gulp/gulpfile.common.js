@@ -9,8 +9,16 @@
  *   Thomas Schmid <schmid-thomas@gmx.net>
  */
 
-const fs = require('fs');
 const { src, dest } = require('gulp');
+const logger = require('gulplog');
+
+const { readdir, unlink, rmdir, readFile, writeFile } = require('fs').promises;
+const { createWriteStream, existsSync } = require('fs');
+
+const path = require('path');
+const yazl = require('yazl');
+
+
 
 const BASE_DIR_BOOTSTRAP = "./node_modules/bootstrap/dist";
 const BASE_DIR_MATERIALICONS = "./node_modules/material-design-icons-iconfont/dist";
@@ -27,34 +35,33 @@ const INDEX_PATCH = 2;
 /**
  * Delete all files from the given path.
  *
- * @param  {string} path
+ * @param  {string} dir
  *   the base path which should be cleared.
- * @returns {undefined}
  */
-async function deleteRecursive(path) {
+async function deleteRecursive(dir) {
   "use strict";
 
-  if (! fs.existsSync(path))
+  if (!existsSync(dir))
     return;
 
-  const files = await fs.promises.readdir(path);
+  const items = await readdir(dir, { withFileTypes: true });
 
-  for (const file of files) {
-    let curPath = path + "/" + file;
-    if (!(await fs.promises.lstat(curPath)).isDirectory()) {
-      await fs.promises.unlink(curPath);
+  for (const item of items) {
+    const curPath = path.join(dir, item.name);
+
+    if (!item.isDirectory()) {
+      await unlink(curPath);
       continue;
     }
 
     await deleteRecursive(curPath);
   }
 
-  await fs.promises.rmdir(path);
+  await rmdir(dir);
 }
 
 /**
  * Clean the build environment including all build and packaging artifacts.
- * @returns {undefined}
  */
 async function clean() {
   "use strict";
@@ -66,12 +73,14 @@ async function clean() {
  *
  * @param {string} destination
  *   where to place the jquery sources
- * @returns {undefined}
+ *
+ * @returns {Stream}
+ *   a stream to be consumed by gulp
  */
-async function packageJQuery(destination) {
+function packageJQuery(destination) {
   "use strict";
 
-  await src([
+  return src([
     BASE_DIR_JQUERY + "/jquery.min.js"
   ], { base: BASE_DIR_JQUERY }).pipe(
     dest(destination));
@@ -82,12 +91,14 @@ async function packageJQuery(destination) {
  *
  * @param {string} destination
  *   where to place the codemirror sources
- * @returns {undefined}
+ *
+ * @returns {Stream}
+ *   a stream to be consumed by gulp
  */
-async function packageCodeMirror(destination) {
+function packageCodeMirror(destination) {
   "use strict";
 
-  await src([
+  return src([
     BASE_DIR_CODEMIRROR + "/addon/edit/**",
     BASE_DIR_CODEMIRROR + "/addon/search/**",
     BASE_DIR_CODEMIRROR + "/lib/**",
@@ -104,12 +115,14 @@ async function packageCodeMirror(destination) {
  *
  * @param {string} destination
  *   where to place the bootstrap sources
- * @returns {undefined}
+ *
+ * @returns {Stream}
+ *   a stream to be consumed by gulp
  **/
-async function packageBootstrap(destination) {
+function packageBootstrap(destination) {
   "use strict";
 
-  await src([
+  return src([
     BASE_DIR_BOOTSTRAP + "/css/*.min.css",
     BASE_DIR_BOOTSTRAP + "/js/*.bundle.min.js"
   ], { base: BASE_DIR_BOOTSTRAP }).pipe(
@@ -121,12 +134,14 @@ async function packageBootstrap(destination) {
  *
  * @param {string} destination
  *   where to place the material design sources
- * @returns {undefined}
+ *
+ * @returns {Stream}
+ *   a stream to be consumed by gulp
  */
-async function packageMaterialIcons(destination) {
+function packageMaterialIcons(destination) {
   "use strict";
 
-  await src([
+  return src([
     BASE_DIR_MATERIALICONS + "/material-design-icons.css",
     BASE_DIR_MATERIALICONS + "/fonts/MaterialIcons-Regular.woff2"
   ], { base: BASE_DIR_MATERIALICONS }).pipe(dest(destination));
@@ -138,7 +153,7 @@ async function packageMaterialIcons(destination) {
  * @param {string} [file]
  *   the path to the package json file.
  * @returns {int[]}
- *   the version as a tripple of integer
+ *   the version as a triple of integer
  */
 async function getPackageVersion(file) {
   "use strict";
@@ -146,7 +161,7 @@ async function getPackageVersion(file) {
   if ((typeof (file) === "undefined") || file === null)
     file = "./package.json";
 
-  let version = JSON.parse(await fs.promises.readFile(file, 'utf8')).version;
+  let version = JSON.parse(await readFile(file, 'utf8')).version;
 
   version = version.split(".");
 
@@ -163,8 +178,6 @@ async function getPackageVersion(file) {
  *   the new version string
  * @param {string} [file]
  *   the path to the npm package json file.
- *
- * @returns {undefined}
  */
 async function setPackageVersion(version, file) {
   "use strict";
@@ -174,12 +187,12 @@ async function setPackageVersion(version, file) {
 
   version = version.join(".");
 
-  console.log(`Updating ${file} to ${version}`);
+  logger.info(`Updating ${file} to ${version}`);
 
-  const data = JSON.parse(await fs.promises.readFile(file, 'utf8'));
+  const data = JSON.parse(await readFile(file, 'utf8'));
   data.version = version;
 
-  await fs.promises.writeFile(file, JSON.stringify(data, null, 2), 'utf-8');
+  await writeFile(file, JSON.stringify(data, null, 2), 'utf-8');
 }
 
 // We can only use major, minor and patch. Everything else
@@ -188,21 +201,19 @@ async function setPackageVersion(version, file) {
 /**
  * Bumps the package.json version info to the next major version.
  * The minor and patch level is reset to zero
- *
- * @returns {undefined}
  */
 async function bumpMajorVersion() {
   "use strict";
 
   const pkgVersion = await getPackageVersion('./package.json');
 
-  console.log("Major bump from " + pkgVersion.join(".") + " ...");
+  logger.info("Major bump from " + pkgVersion.join(".") + " ...");
 
   pkgVersion[INDEX_MAJOR] = parseInt(pkgVersion[INDEX_MAJOR], 10) + 1;
   pkgVersion[INDEX_MINOR] = 0;
   pkgVersion[INDEX_PATCH] = 0;
 
-  console.log("... to " + pkgVersion.join("."));
+  logger.info("... to " + pkgVersion.join("."));
 
   await setPackageVersion(pkgVersion, './package.json');
 }
@@ -210,20 +221,18 @@ async function bumpMajorVersion() {
 /**
  * Bumps the package.json version info to the next minor version.
  * The major version remains untouched but the patch level is reset to zero
- *
- * @returns {undefined}
  */
 async function bumpMinorVersion() {
   "use strict";
 
   const pkgVersion = await getPackageVersion('./package.json');
 
-  console.log("Minor bump from " + pkgVersion.join("."));
+  logger.info("Minor bump from " + pkgVersion.join("."));
 
   pkgVersion[INDEX_MINOR] = parseInt(pkgVersion[INDEX_MINOR], 10) + 1;
   pkgVersion[INDEX_PATCH] = 0;
 
-  console.log("... to " + pkgVersion.join("."));
+  logger.info("... to " + pkgVersion.join("."));
 
   await setPackageVersion(pkgVersion, './package.json');
 }
@@ -231,24 +240,120 @@ async function bumpMinorVersion() {
 /**
  * Pumps the package.json version info to the next patch level.
  * Neither the major nor the minor version will be changed.
- *
- * @returns {undefined}
  */
 async function bumpPatchVersion() {
   "use strict";
 
   const pkgVersion = await getPackageVersion('./package.json');
 
-  console.log("Patch bump from " + pkgVersion.join("."));
+  logger.info("Patch bump from " + pkgVersion.join("."));
 
   pkgVersion[INDEX_PATCH] = parseInt(pkgVersion[INDEX_PATCH], 10) + 1;
 
-  console.log("... to " + pkgVersion.join("."));
+  logger.info("... to " + pkgVersion.join("."));
 
   await setPackageVersion(pkgVersion, './package.json');
 }
 
+/**
+ * Compresses the given file or directory recursively.
+ *
+ * You can set special file permissions via the options.
+ * See the parent compress method for more details.
+ *
+ * The path's of zipped files are stored relative to an
+ * root directory. By default the root directory is set to
+ * the source directory. But you can override it by setting
+ * "options.root".
+ *
+ * @param {ZipFile} zip
+ *   the yazl object
+ * @param {string} dir
+ *   the directory or file which should be compressed.
+ * @param {object} options
+ *   extended instructions for compressing.
+ */
+async function compressDirectory(zip, dir, options) {
+  "use strict";
+
+  if (typeof (options) === "undefined" || options === null)
+    options = {};
+
+  if (!options.root)
+    options.root = dir;
+
+  const dirs = await readdir(dir, { withFileTypes: true });
+
+  for (const item of dirs) {
+
+    const realPath = path.join(dir, item.name);
+    const metaPath = path.relative(options.root, realPath);
+
+    if (item.isDirectory()) {
+      zip.addEmptyDirectory(metaPath);
+      await compressDirectory(zip, realPath, options);
+      continue;
+    }
+
+    let fileOptions = null;
+    if (options.permissions) {
+      if (options.permissions[metaPath])
+        fileOptions = { mode: options.permissions[metaPath] };
+
+      if (options.permissions["*"]) {
+        fileOptions = { mode: options.permissions["*"] };
+      }
+    }
+
+    zip.addFile(realPath, metaPath, fileOptions);
+  }
+}
+
+/**
+ * Stores and compresses all data from the source directory
+ * into the destination file
+ *
+ * You can change the default permissions for all files by setting
+ * the option "permissions[*]" to the desired permission.
+ *
+ * To change the permission for a single file just specify the
+ * meta file name instead of the asterisk.
+ *
+ * @param {string} source
+ *   the source directory or file.
+ * @param {string} destination
+ *   the destination file. In case it exists it will be overwritten.
+ * @param {object} options
+ *   extended instructions for compressing.
+ */
+async function compress(source, destination, options) {
+
+  "use strict";
+
+  if (existsSync(destination)) {
+    logger.info(`Deleting ${path.basename(destination)}`);
+    await unlink(destination);
+  }
+
+  logger.info(`Collecting files ${source}`);
+
+  const zip = new yazl.ZipFile();
+
+  await compressDirectory(zip, source, options);
+
+  logger.info(`Compressing files ${path.basename(destination)}`);
+
+  await new Promise((resolve) => {
+    zip.outputStream
+      .pipe(createWriteStream(destination))
+      .on("close", () => { resolve(); });
+
+    zip.end();
+  });
+}
+
 exports["clean"] = clean;
+exports["compress"] = compress;
 
 exports["packageJQuery"] = packageJQuery;
 exports["packageCodeMirror"] = packageCodeMirror;

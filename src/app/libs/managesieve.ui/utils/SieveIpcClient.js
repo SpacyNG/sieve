@@ -13,12 +13,20 @@
 
   "use strict";
 
-  const { SieveAbstractIpcClient} = require("./SieveAbstractIpcClient.js");
+  const { SieveLogger } = require("./SieveLogger.js");
+  const { SieveAbstractIpcClient } = require("./SieveAbstractIpcClient.js");
 
   /**
    * Implements a IPC based on the postMessage interface.
    */
   class SieveIpcClient extends SieveAbstractIpcClient {
+
+    /**
+     * @inheritdoc
+     */
+    static getLogger() {
+      return SieveLogger.getInstance();
+    }
 
     /**
      * @inheritdoc
@@ -37,13 +45,19 @@
       if (target === undefined)
         target = parent;
 
-      if (typeof(message) !== 'string') {
+      if (typeof (message) !== 'string') {
         message = JSON.stringify(message);
       }
 
-      console.log("Sending message " + message);
+      this.getLogger().logIpcMessage(`Sending message ${message}`);
 
-      target.postMessage(message, origin);
+      if (target !== window) {
+        target.postMessage(message, origin);
+        return;
+      }
+
+      for (let idx = 0; idx < frames.length; idx++)
+        frames[idx].postMessage(message, origin);
     }
 
     /**

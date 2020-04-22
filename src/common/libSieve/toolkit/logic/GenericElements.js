@@ -1,5 +1,5 @@
 /*
- * The contents of this file are licenced. You may obtain a copy of
+ * The contents of this file are licensed. You may obtain a copy of
  * the license at https://github.com/thsmi/sieve/ or request it via
  * email from the author.
  *
@@ -27,6 +27,7 @@
   class SieveAbstractGeneric {
 
     /**
+     * Creates a new instance.
      *
      * @param {*} item
      */
@@ -46,6 +47,7 @@
      *   true in case the generic is capable of parsing
      *   otherwise false.
      */
+    // eslint-disable-next-line no-unused-vars
     onProbe(parser, lexer) {
       let tokens = this.item.token;
 
@@ -123,7 +125,7 @@
 
       element.addLiteral(";", "\r\n");
 
-      // add something optional which eats whitespaces but stops a comments or linebreaks.
+      // add something optional which eats whitespace but stops a comments or linebreaks.
       return element;
     }
 
@@ -167,7 +169,7 @@
      * @inheritdoc
      */
     onProbe(parser, lexer) {
-      // in case we have an explicite token we got for it...
+      // in case we have an explicit token we got for it...
       if (this.item.token !== null && typeof (this.item.token) !== "undefined")
         return super.onProbe(parser, lexer);
 

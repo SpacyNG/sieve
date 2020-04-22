@@ -1,12 +1,9 @@
-
-/* global window */
-
 (function () {
 
   "use strict";
 
   /* global net */
-  let suite = net.tschmid.yautt.test.server;
+  const suite = net.tschmid.yautt.test.server;
 
   if (!suite)
     throw new Error("Could not locate the test server");
@@ -59,7 +56,7 @@
 
   suite.add({
     "sieve-elements": {
-      script: "./../common/libSieve/RFC5228/tests/SieveRFC5228SnippletTest.js",
+      script: "./../common/libSieve/RFC5228/tests/SieveRFC5228SnippetTest.js",
       extend: "rfc5228"
     }
   });

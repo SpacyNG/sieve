@@ -36,7 +36,7 @@
 
   /**
    * Gets a list of modules.
-   * It will throw an exceptin in case one or more of the module
+   * It will throw an exception in case one or more of the module
    * names could not be loaded from the current scope
    *
    * @param  {...string} names
@@ -54,10 +54,46 @@
     return m;
   }
 
+  const globals = new Map();
+  globals.set("./SieveUniqueId.js", "SieveUniqueId");
+  globals.set("./../../utils/SieveUniqueId.js", "SieveUniqueId");
+  globals.set("./../utils/SieveUniqueId.js", "SieveUniqueId");
+
+  globals.set("./SieveAbstractIpcClient.js", "SieveAbstractIpcClient");
+
+  globals.set("./../utils/SieveTemplateLoader.js", "SieveTemplateLoader");
+  globals.set("./SieveI18n.js", "SieveI18n");
+
+  globals.set("./SieveAbstractAccounts.js", "SieveAbstractAccounts");
+  globals.set("./SieveAbstractAccount.js", "SieveAbstractAccount");
+  globals.set("./SievePrefManager.js", "SievePrefManager");
+  globals.set("./SieveHostSettings.js", "SieveHost");
+  globals.set("./SieveAuthorizationSettings.js", "SieveAuthorization");
+  globals.set("./SieveAuthenticationSettings.js", "SieveAuthentication");
+  globals.set("./SieveSecuritySettings.js", "SieveSecurity");
+  globals.set("./SieveAccountSettings.js", "SieveAccountSettings");
+  globals.set("./SieveEditorSettings.js", "SieveEditorSettings");
+
+  globals.set("./SieveLogger.js", "SieveLogger");
+
+  globals.set("libs/managesieve.ui/settings/SieveAbstractMechanism.js", "SieveAbstractMechanism");
+  globals.set(
+    "libs/managesieve.ui/settings/SieveAbstractAuthorization.js",
+    ["SieveAbstractAuthorization", "SieveDefaultAuthorization"]);
+  globals.set("libs/managesieve.ui/settings/SieveAbstractAuthentication.js", "SieveAbstractAuthentication");
+
+
+  globals.set("libs/managesieve.ui/settings/SieveAbstractHost.js", "SieveAbstractHost");
+
+  globals.set("libs/managesieve.ui/settings/SievePrefManager.js", "SievePrefManager");
+  globals.set("libs/managesieve.ui/settings/SieveAbstractPrefManager.js", "SieveAbstractPrefManager");
+
+
+
   /**
    * A fake CommonJs Module implementation.
-   * Temporaily needs as node does not yes support ES6 modules.
-   * And mozilla does not really support CommonJS
+   * Temporarily needed as node does not yet support ES6 modules.
+   * And mozilla does not support CommonJS
    *
    * @param {string} module
    *   the module to be loaded
@@ -67,18 +103,20 @@
    */
   function fakeRequire(module) {
 
-    if (module === "./SieveAbstractIpcClient.js")
-      return getModules("SieveAbstractIpcClient");
+    if (!globals.has(module))
+      throw new Error(`Module ${module} unknown to fake module loader`);
 
-    if (module === "./SieveUniqueId.js")
-      return getModules("SieveUniqueId");
+    let modules = globals.get(module);
 
-    throw new Error(`Module ${module} unknown to fake module loader`);
+    if (!Array.isArray(modules))
+      modules = [modules];
+
+    return getModules(...modules);
   }
 
 
   // In case there is no require in our scope we add our fake.
-  if (typeof(exports.require) !== "undefined" && exports.require !== null) {
+  if (typeof (exports.require) !== "undefined" && exports.require !== null) {
     exports.require = fakeRequire();
   }
 

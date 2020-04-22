@@ -12,9 +12,19 @@
 const { series, parallel } = require('gulp');
 
 const common = require('./gulp/gulpfile.common.js');
-const addon = require('./gulp/gulpfile.addon.js');
 const app = require('./gulp/gulpfile.app.js');
+const wx = require('./gulp/gulpfile.wx.js');
 const testing = require('./gulp/gulpfile.testing.js');
+
+// WX related gulp tasks
+
+exports["wx:watch"] = wx.watch;
+exports["wx:package"] = wx.package;
+
+exports['wx:package-xpi'] = series(
+  wx.package,
+  wx.packageXpi
+);
 
 // App related gulp tasks
 exports["app:watch"] = app.watch;
@@ -25,26 +35,25 @@ exports['app:package-win32'] = series(
   app.packageWin32
 );
 
+exports['app:zip-win32'] = series(
+  exports['app:package-win32'],
+  app.zipWin32
+);
+
 exports['app:package-linux'] = series(
   app.package,
   app.packageLinux
+);
+
+exports['app:zip-linux'] = series(
+  exports['app:package-linux'],
+  app.zipLinux
 );
 
 exports['app:package-macos'] = series(
   app.package,
   app.packageMacOS
 );
-
-// Addon related gulp tasks
-exports['addon:watch'] = addon.watch;
-exports['addon:package'] = addon.package;
-
-exports['addon:package-xpi'] = series(
-  addon.package,
-  addon.packageXpi
-);
-
-exports['addon:deploy'] = addon.deploy;
 
 // Test related gulp tasks
 exports["test:package"] = testing.package;
@@ -58,7 +67,7 @@ exports["bump-major"] = series(
   common.bumpMajorVersion,
   parallel(
     app.updateVersion,
-    addon.updateVersion
+    wx.updateVersion
   )
 );
 
@@ -66,7 +75,7 @@ exports["bump-minor"] = series(
   common.bumpMinorVersion,
   parallel(
     app.updateVersion,
-    addon.updateVersion
+    wx.updateVersion
   )
 );
 
@@ -74,6 +83,6 @@ exports["bump-patch"] = series(
   common.bumpPatchVersion,
   parallel(
     app.updateVersion,
-    addon.updateVersion
+    wx.updateVersion
   )
 );

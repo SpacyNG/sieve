@@ -29,10 +29,10 @@
      * Creates a new text editor UI.
      *
      * @param {SieveEditorController} controller
-     *   The controller which is assigne to this editor.
+     *   The controller which is assigned to this editor.
      * @param {string} [id]
-     *   An optional id, which points to a the textboxe, which will be converted
-     *   into a code mirror input. In case it is ommited the id "code" will be used.
+     *   An optional id, which points to a the textbox, which will be converted
+     *   into a code mirror input. In case it is omitted the id "code" will be used.
      */
     constructor(controller, id) {
 
@@ -41,36 +41,56 @@
       if (typeof (id) === "undefined" || id === null)
         this.id = "code";
 
-
+      this.syntaxCheckEnabled = false;
       this.timeout = null;
+
       this.cm = null;
 
       this.activeLine = null;
 
-      this.disableSyntaxCheck();
+      this.changed = false;
     }
 
+    /**
+     * Renders the text editors settings
+     */
     async renderSettings() {
 
-      // Indentation
+
       const loader = new SieveTemplateLoader();
+
+      // Syntax Checks
+      $("#sieve-content-settings")
+        .append(await loader.load("./editor/text/editor.settings.syntax.tpl"));
+
+      $("#sieve-editor-settings-synatxcheck").click(async () => {
+
+        if ($("#sieve-editor-settings-synatxcheck").prop("checked"))
+          await this.enableSyntaxCheck();
+        else
+          await this.disableSyntaxCheck();
+      });
+
+      $("#sieve-editor-settings-synatxcheck").prop( "checked", this.isSyntaxCheckEnabled());
+
+      // Indentation
       $("#sieve-content-settings")
         .append(await loader.load("./editor/text/editor.settings.indentation.tpl"));
 
       // Indentation width...
-      $("#editor-settings-indentation-width").change(() => {
-        this.setIndentWidth($("#editor-settings-indentation-width").val());
+      $("#editor-settings-indentation-width").change(async () => {
+        await this.setIndentWidth($("#editor-settings-indentation-width").val());
       });
 
       $("#editor-settings-indentation-width").val(this.getIndentWidth());
 
       // Indentation policy...
-      $("#editor-settings-indentation-policy-spaces").on('click', () => {
-        this.setIndentWithTabs(false);
+      $("#editor-settings-indentation-policy-spaces").on('click', async () => {
+        await this.setIndentWithTabs(false);
       });
 
-      $("#editor-settings-indentation-policy-tabs").on('click', () => {
-        this.setIndentWithTabs(true);
+      $("#editor-settings-indentation-policy-tabs").on('click', async () => {
+        await this.setIndentWithTabs(true);
       });
 
       if (this.getIndentWithTabs())
@@ -79,41 +99,10 @@
         $("#editor-settings-indentation-policy-spaces").button('toggle');
 
       // Tabulator width...
-      $("#editor-settings-tabulator-width").change(() => {
-        this.setTabWidth($("#editor-settings-tabulator-width").val());
+      $("#editor-settings-tabulator-width").change(async () => {
+        await this.setTabWidth($("#editor-settings-tabulator-width").val());
       });
       $("#editor-settings-tabulator-width").val(this.getTabWidth());
-
-
-      // Syntax Checks
-      $("#sieve-content-settings")
-        .append(await loader.load("./editor/text/editor.settings.syntax.tpl"));
-
-      $("#sieve-editor-settings-synatxcheck-on").click(() => {
-        this.enableSyntaxCheck();
-        this.updateSyntaxCheckUI();
-      });
-
-      $("#sieve-editor-settings-synatxcheck-off").click(() => {
-        this.disableSyntaxCheck();
-        this.updateSyntaxCheckUI();
-      });
-
-      if (this.isSyntaxCheckEnabled())
-        this.updateSyntaxCheckUI();
-      else
-        this.updateSyntaxCheckUI();
-    }
-
-    updateSyntaxCheckUI() {
-
-      if (this.isSyntaxCheckEnabled()) {
-        $("#sieve-editor-settings-synatxcheck-on").button("toggle");
-        return;
-      }
-
-      $("#sieve-editor-settings-synatxcheck-off").button("toggle");
-      return;
     }
 
     /**
@@ -165,10 +154,6 @@
         }
       });
 
-      $("#sieve-editor-save").click(() => {
-        this.save();
-      });
-
       $("#sieve-editor-undo").click(() => {
         this.undo();
       });
@@ -216,12 +201,17 @@
         $("#sieve-editor-find-toolbar").toggle();
       });
 
-
-      $("#sieve-editor-quickreference").click(() => {
-        this.openReference();
-      });
-
       await this.renderSettings();
+    }
+
+    /**
+     * Returns the editor change status.
+     *
+     * @returns {boolean}
+     *   true in case the document was changed otherwise false.
+     */
+    hasChanged() {
+      return this.changed;
     }
 
     /**
@@ -229,7 +219,7 @@
      */
     async setScript(script) {
       // Load a new script. It will discard the current script
-      // the cursorposition is reset to defaults.
+      // the cursor position is reset to defaults.
 
       this.cm.setValue(script);
       this.cm.setCursor({ line: 0, ch: 0 });
@@ -249,18 +239,9 @@
 
       const script = this.cm.getValue();
 
-      // ... and ensure the line endings are sanatized
+      // ... and ensure the line endings are sanitized
       // eslint-disable-next-line no-control-regex
       return script.replace(/\r\n|\r|\n|\u0085|\u000C|\u2028|\u2029/g, "\r\n");
-    }
-
-    /**
-     * Opens the sieve reference in a browser window
-     */
-    async openReference() {
-      await this.getController().openReference();
-      this.focus();
-      this.cm.refresh();
     }
 
     /**
@@ -276,7 +257,6 @@
      */
     clearHistory() {
       this.cm.clearHistory();
-      this.setChanged(false);
     }
 
     /**
@@ -284,12 +264,12 @@
      */
     async checkScript() {
 
-      const errors = await this.getController().checkScript(this.getScript());
+      const errors = await this.getController().checkScript(await this.getScript());
 
-      if (!errors)
-        this.hideSyntaxErrors();
-      else
+      if (errors && errors !== "")
         this.showSyntaxErrors(errors);
+      else
+        this.hideSyntaxErrors();
     }
 
     /**
@@ -314,7 +294,6 @@
     async cut() {
       await this.copy();
       this.cm.replaceSelection("");
-      this.setChanged(true);
 
       this.cm.focus();
     }
@@ -336,7 +315,6 @@
     async paste() {
       const data = await this.getController().getClipboard();
       this.cm.replaceSelection(data);
-      this.setChanged(true);
 
       this.cm.focus();
     }
@@ -484,7 +462,6 @@
       }
 
       this.cm.replaceSelection(newToken);
-      this.setChanged(true);
 
       return true;
     }
@@ -514,8 +491,6 @@
      */
     onChange() {
 
-      this.setChanged(true);
-
       if (this.syntaxCheckEnabled === false)
         return;
 
@@ -525,7 +500,6 @@
         this.timeout = null;
       }
 
-      // TODO check if compile is deactivated...
       this.timeout = setTimeout(() => { this.checkScript(); }, COMPILE_DELAY);
     }
 
@@ -548,17 +522,19 @@
     /**
      * Enables checking for syntax errors
      */
-    enableSyntaxCheck() {
+    async enableSyntaxCheck() {
       this.syntaxCheckEnabled = true;
       this.checkScript();
 
       this.focus();
+
+      await this.getController().setPreference("syntax-check", this.syntaxCheckEnabled);
     }
 
     /**
      * Disables checking for syntax errors
      */
-    disableSyntaxCheck() {
+    async disableSyntaxCheck() {
       this.syntaxCheckEnabled = false;
       this.hideSyntaxErrors();
 
@@ -566,6 +542,8 @@
       $("#sieve-editor-settings .sieve-editor-enable-syntaxcheck").hide();
 
       this.focus();
+
+      await this.getController().setPreference("syntax-check", this.syntaxCheckEnabled);
 
       // reset the timer...
       if (this.timeout === null)
@@ -611,13 +589,15 @@
      * @returns {SieveEditorUI}
      *   a self reference
      */
-    setIndentWidth(width) {
+    async setIndentWidth(width) {
       width = parseInt(width, 10);
 
       if (isNaN(width))
         throw new Error("Invalid Indent width");
 
       this.cm.setOption("indentUnit", width);
+      await this.getController().setPreference("indentation-width", width);
+
       return this;
     }
 
@@ -639,8 +619,11 @@
      * @returns {SieveEditorUI}
      *   a self reference
      */
-    setIndentWithTabs(useTabs) {
+    async setIndentWithTabs(useTabs) {
       this.cm.setOption("indentWithTabs", useTabs);
+
+      await this.getController().setPreference("indentation-policy", useTabs);
+
       return this;
     }
 
@@ -655,20 +638,23 @@
     }
 
     /**
-     * Sets the editor's tabulator width.
+     * Sets the editor's tabulator width and persists the changed value.
      *
      * @param {int} tabSize
      *   the tabulator width in characters
      * @returns {SieveEditorUI}
      *   a self reference
      */
-    setTabWidth(tabSize) {
+    async setTabWidth(tabSize) {
       tabSize = parseInt(tabSize, 10);
 
       if (isNaN(tabSize))
-        throw new Error("Invalid Tab width");
+        throw new Error(`Invalid Tab width ${tabSize}`);
 
       this.cm.setOption("tabSize", tabSize);
+
+      await this.getController().setPreference("tabulator-width", tabSize);
+
       return this;
     }
 
@@ -684,33 +670,55 @@
     /**
      * @inheritdoc
      */
-    async loadDefaultSettings() {
+    async loadSettings() {
       const tabWidth = await this.getController().getPreference("tabulator-width");
-      this.setTabWidth(tabWidth);
+      await this.setTabWidth(tabWidth);
 
       const IndentWithTabs = await this.getController().getPreference("indentation-policy");
-      this.setIndentWithTabs(IndentWithTabs);
+      await this.setIndentWithTabs(IndentWithTabs);
 
       const indentWidth = await this.getController().getPreference("indentation-width");
-      this.setIndentWidth(indentWidth);
+      await this.setIndentWidth(indentWidth);
 
       const syntaxCheck = await this.getController().getPreference("syntax-check");
-      if (syntaxCheck)
-        this.enableSyntaxCheck();
+      if (syntaxCheck === false || syntaxCheck === "false")
+        await this.disableSyntaxCheck();
       else
-        this.disableSyntaxCheck();
+        await this.enableSyntaxCheck();
+    }
+
+    /**
+     * @inheritdoc
+     */
+    async loadDefaultSettings() {
+      const tabWidth = await this.getController().getDefaultPreference("tabulator-width");
+      await this.setTabWidth(tabWidth);
+
+      const IndentWithTabs = await this.getController().getDefaultPreference("indentation-policy");
+      await this.setIndentWithTabs(IndentWithTabs);
+
+      const indentWidth = await this.getController().getDefaultPreference("indentation-width");
+      await this.setIndentWidth(indentWidth);
+
+      const syntaxCheck = await this.getController().getDefaultPreference("syntax-check");
+      if (syntaxCheck === false)
+        await this.disableSyntaxCheck();
+      else
+        await this.enableSyntaxCheck();
+
+      await this.renderSettings();
     }
 
     /**
      * @inheritdoc
      */
     async saveDefaultSettings() {
-      await this.getController().setPreference("tabulator-width", this.getTabWidth());
+      await this.getController().setDefaultPreference("tabulator-width", this.getTabWidth());
 
-      await this.getController().setPreference("indentation-policy", this.getIndentWithTabs());
-      await this.getController().setPreference("indentation-width", this.getIndentWidth());
+      await this.getController().setDefaultPreference("indentation-policy", this.getIndentWithTabs());
+      await this.getController().setDefaultPreference("indentation-width", this.getIndentWidth());
 
-      await this.getController().setPreference("syntax-check", this.isSyntaxCheckEnabled());
+      await this.getController().setDefaultPreference("syntax-check", this.isSyntaxCheckEnabled());
     }
 
   }

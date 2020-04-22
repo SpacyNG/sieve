@@ -18,8 +18,6 @@
   const { SieveIpcClient } = require("./../utils/SieveIpcClient.js");
   const { SieveUniqueId } = require("./../utils/SieveUniqueId.js");
 
-  const { SieveScriptSaveDialog} = require("./../../../ui/dialogs/SieveDialogUI.js");
-
   /**
    * Implements a single tab ui element.
    */
@@ -40,6 +38,12 @@
       this.name = name;
     }
 
+    /**
+     * Gets the current tab. The dom element is used to store meta data.
+     *
+     * @returns {DomElement}
+     *   the tab's dom element
+     */
     getTab() {
       return $(`#${this.tabs.tabId} [data-sieve-account='${this.account}'][data-sieve-name='${this.name}']`);
     }
@@ -60,7 +64,7 @@
       this.getTab().find(".nav-link").tab('show');
 
       // On Tab show is not fired when the tab is already visible.
-      // so we need to emulate this. In worst case we endup with a
+      // so we need to emulate this. In worst case we end up with a
       // duplicated shown message...
       this.onTabShown();
     }
@@ -75,48 +79,53 @@
       return $(`#${this.getId()}-content`)[0].contentWindow;
     }
 
+    /**
+     * Called whenever the tab got activated and the tab's content was
+     * shown to the user.
+     */
     onTabShown() {
-      SieveIpcClient.sendMessage("editor-shown", null, this.getContent());
-    }
-
-    async save() {
-
-      if (!await this.hasChanges())
-        return true;
-
-      const result = await(new SieveScriptSaveDialog(this.name).show());
-
-      if (SieveScriptSaveDialog.isCanceled(result))
-        return false;
-
-      if (SieveScriptSaveDialog.isAccepted(result))
-        await SieveIpcClient.sendMessage("editor-save", null, this.getContent());
-
-      return true;
+      SieveIpcClient.sendMessage("editor", "editor-shown", null, this.getContent());
     }
 
     /**
      * Closes the tab and removes the tab content frame.
      */
-    close() {
+    async close() {
+
+      if (await this.hasChanges()) {
+        this.show();
+        const rv = await SieveIpcClient.sendMessage("editor", "editor-close", this.name, this.getContent());
+
+        // Closing was canceled?
+        if (!rv)
+          return false;
+      }
+
       $(`#${this.getId()}-tab`).remove();
       $(`#${this.getId()}-content`).remove();
+
+      return true;
     }
 
     /**
      * Checks if the tab has unsaved changes.
      *
      * @returns {boolean}
-     *   ture in case of unsaved changes
+     *   true in case of unsaved changes
      */
     async hasChanges() {
-      return await SieveIpcClient.sendMessage("editor-hasChanged", null, this.getContent());
+      return await SieveIpcClient.sendMessage("editor", "editor-hasChanged", null, this.getContent());
     }
 
   }
 
   class SieveTabUI {
 
+    /**
+     * Creates a new instance
+     * @param {string} [id]
+     *   the tab bars unique id. It is the element which hosts the tabs.
+     */
     constructor(id) {
       if (id === null || id === undefined)
         id = "myTab";
@@ -172,19 +181,6 @@
       return tab;
     }
 
-    setChanged(account, name, changed) {
-
-      const tab = this.getTab(account, name).getTab().find(".close");
-
-      if (changed) {
-        tab.text("•");
-        return;
-      }
-
-      tab.text("×");
-    }
-
-
     /**
      * Checks if a tab for the given script exits.
      *
@@ -208,7 +204,7 @@
      * Closes the given tab.
      * Tabs are identified by the unique account id plus the script name.
      * @param {string} account
-     *   the uniue account id.
+     *   the unique account id.
      * @param {string} name
      *   the script name.
      */
@@ -219,12 +215,10 @@
       if (!tab)
         return;
 
-      if (!await tab.save(account, name)) {
-        tab.show();
+      if (!await tab.close()) {
         return;
       }
 
-      tab.close();
       $("#accounts-tab").find(".nav-link").tab('show');
     }
 

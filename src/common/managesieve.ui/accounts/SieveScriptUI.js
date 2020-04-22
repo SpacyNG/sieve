@@ -16,9 +16,12 @@
 
   "use strict";
 
+  const HEX = 16;
+  const HEX_OFFSET = -2;
+
   /**
    * An UI elements which handles displaying details for a sieve script.
-   * It does not provied any support for editing the scripts content.
+   * It does not provide any support for editing the scripts content.
    */
   class SieveScriptUI {
 
@@ -48,9 +51,9 @@
       // Convert the name into hex to escape dangerous characters.
       let str = "";
       for (let i = 0; i < this.name.length; i++)
-        str += ("0" + this.name.charCodeAt(i).toString(16)).slice(-2);
+        str += ("0" + this.name.charCodeAt(i).toString(HEX)).slice(HEX_OFFSET);
 
-      return this.account.id + "-" + str;
+      return `${this.account.id}-${str}`;
     }
 
 
@@ -61,15 +64,15 @@
 
       const id = this.getId();
 
-      let item = $("#siv-script-" + id);
+      let item = $(`#siv-script-${id}`);
       // Check if the element exists...
       if (item.length === 0) {
 
         item = await (new SieveTemplateLoader()).load("./accounts/SieveScriptUI.tpl");
 
-        item.attr("id", "siv-script-" + id);
+        item.attr("id", `siv-script-${id}`);
 
-        $("#siv-account-" + this.account.id + " .siv-tpl-scripts").append(item);
+        $(`#siv-account-${this.account.id} .siv-tpl-scripts`).append(item);
 
         $(item).find(".sieve-list-script-name").text(this.name);
 
@@ -83,20 +86,20 @@
       item.prop("active", this.isActive);
 
       if (this.isActive === false) {
-        $("#siv-script-" + id + " .sieve-list-script-active").addClass("invisible");
-        $("#siv-script-" + id + " .sieve-script-activate").removeClass("d-none");
-        $("#siv-script-" + id + " .sieve-script-deactivate").addClass("d-none");
+        $(`#siv-script-${id} .sieve-list-script-active`).addClass("invisible");
+        $(`#siv-script-${id} .sieve-script-activate`).removeClass("d-none");
+        $(`#siv-script-${id} .sieve-script-deactivate`).addClass("d-none");
       }
       else {
-        $("#siv-script-" + id + " .sieve-list-script-active").removeClass("invisible");
-        $("#siv-script-" + id + " .sieve-script-activate").addClass("d-none");
-        $("#siv-script-" + id + " .sieve-script-deactivate").removeClass("d-none");
+        $(`#siv-script-${id} .sieve-list-script-active`).removeClass("invisible");
+        $(`#siv-script-${id} .sieve-script-activate`).addClass("d-none");
+        $(`#siv-script-${id} .sieve-script-deactivate`).removeClass("d-none");
       }
     }
 
     /**
      * Renames the script.
-     * A propmpt will be show which ask the user about the new name
+     * A prompt will be show which ask the user about the new name
      */
     async rename() {
 

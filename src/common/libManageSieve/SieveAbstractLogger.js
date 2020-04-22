@@ -29,14 +29,12 @@
 
   const DEFAULT_LEVEL = 0;
 
-
-
   /**
    * Implements a common and platform independent logging interface.
    * The log level is interpreted as a bit filed with turns logging
    * for the specified scope on and of.
    *
-   * The level is concerning scopes and does not diffrentiate between
+   * The level is concerning scopes and does not differentiate between
    * warning, error and info.
    */
   class SieveAbstractLogger {
@@ -73,13 +71,17 @@
 
     /**
      * Logs response related information
-     * @param {string} message
+     * @param {byte[]} data
      *   the response status to log
      * @returns {SieveAbstractLogger}
      *   a self reference
      */
-    logResponse(message) {
-      return this.log(message, LOG_RESPONSE);
+    logResponse(data) {
+      const byteArray = new Uint8Array(data.slice(0, data.length));
+
+      return this.log(
+        "Server -> Client\n" + (new TextDecoder("UTF-8")).decode(byteArray),
+        LOG_RESPONSE);
     }
 
     /**
@@ -123,12 +125,12 @@
      * @param {string} message
      *   The message which should be logged
      * @param {int} [level]
-     *   the log level. If ommited the message will be always logged.
+     *   the log level. If omitted the message will be always logged.
      * @returns {SieveAbstractLogger}
      *   a self reference
      */
     log(message, level) {
-      throw new Error("Implement log(" + message + "," + level + ")");
+      throw new Error(`Implement log(${message},${level})`);
     }
 
     /**
@@ -152,7 +154,7 @@
     }
 
     /**
-     * Tests if the loglevel should log.
+     * Tests if the log level should log.
      *
      * @param {int} level
      *   the level which should be checked.
@@ -167,15 +169,45 @@
     }
 
     /**
+     * Checks if stream data should be logged.
+     *
+     * @returns {boolean}
+     *   true in case the stream data should be logged otherwise false
+     */
+    isLevelStream() {
+      return this.isLoggable(LOG_STREAM);
+    }
+
+    /**
+     * Checks if request data should be logged.
+     *
+     * @returns {boolean}
+     *   true in case the request data should be logged otherwise false
+     */
+    isLevelRequest() {
+      return this.isLoggable(LOG_REQUEST);
+    }
+
+    /**
+     * Checks if response data should be logged.
+     *
+     * @returns {boolean}
+     *   true in case the response data should be logged otherwise false
+     */
+    isLevelResponse() {
+      return this.isLoggable(LOG_RESPONSE);
+    }
+
+    /**
      * Gets and sets the log level to the given bit mask.
-     * Note that the loglevel is a bit mask, every bit in the
-     * bitmask corresponds to a special logger.
+     * Note that the log level is a bit mask, every bit in the
+     * bit mask corresponds to a special logger.
      *
      * In order to activate or deactivate a logger you need to
      * get the level toggle the desired bits and set the new level.
      *
      * @param {int} [level]
-     *   the desired loglevel as bit mask.
+     *   the desired log level as bit mask.
      * @returns {int}
      *   the current log level
      */
@@ -188,7 +220,7 @@
 
 
     /**
-     * Padds the given string with leading zeros
+     * Pads the given string with leading zeros
      * @private
      *
      * @param {string} n
@@ -227,7 +259,8 @@
 
 
     /**
-     * Gets and sets the loggers prefix. The prefix is appended to every logmessage
+     * Gets and sets the loggers prefix. The prefix is appended to
+     * every logger message
      *
      * @param {string} [prefix]
      *   the new prefix.

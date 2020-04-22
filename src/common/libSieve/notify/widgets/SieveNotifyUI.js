@@ -33,6 +33,8 @@
   class SieveNotifyActionUI extends SieveActionDialogBoxUI {
 
     /**
+     * Gets the uri for the notification method.
+     *
      * @returns {SieveString}
      *   the uri as string.
      */
@@ -140,9 +142,11 @@
     }
   }
 
-  class SieveNotifyMethodCapablityUI extends SieveTestDialogBoxUI {
+  class SieveNotifyMethodCapabilityUI extends SieveTestDialogBoxUI {
 
     /**
+     * Gets the match type.
+     *
      * @returns {SieveAbstractElement}
      *   the element's matchtype field
      */
@@ -151,6 +155,8 @@
     }
 
     /**
+     * Gets the comparator type.
+     *
      * @returns {SieveAbstractElement}
      *   the element's comparator field
      */
@@ -225,7 +231,7 @@
   }
 
 
-  class SieveValidNotifyMethodeUI extends SieveTestDialogBoxUI {
+  class SieveValidNotifyMethodUI extends SieveTestDialogBoxUI {
 
     uris() {
       return this.getSieve().getElement("uris");
@@ -338,7 +344,7 @@
   SieveDesigner.register2(SieveModifierEncodeUrlWidget);
 
   SieveDesigner.register("action/notify", SieveNotifyActionUI);
-  SieveDesigner.register("test/notify_method_capability", SieveNotifyMethodCapablityUI);
-  SieveDesigner.register("test/valid_notify_method", SieveValidNotifyMethodeUI);
+  SieveDesigner.register("test/notify_method_capability", SieveNotifyMethodCapabilityUI);
+  SieveDesigner.register("test/valid_notify_method", SieveValidNotifyMethodUI);
 
 })(window);

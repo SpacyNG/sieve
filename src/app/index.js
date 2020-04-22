@@ -21,16 +21,44 @@
   // be closed automatically when the JavaScript object is garbage collected.
   let win;
 
+  // ensure we are running as a singleton.
+  const isLocked = app.requestSingleInstanceLock();
+
+  if (!isLocked) {
+    app.quit();
+    return;
+  }
+
+  app.on('second-instance', () => {
+    // Someone tried to run a second instance, we should focus our window.
+    if (!win)
+      return;
+
+    if (win.isMinimized());
+    win.restore();
+
+    win.focus();
+  });
+
   /**
    * Creates the main window
-   *
    */
   function createWindow() {
+
+    let icon = undefined;
+    if (process.platform === "linux")
+      icon = path.join(__dirname, 'libs/icons/linux.png');
+
     // Create the browser window.
-    win = new BrowserWindow({ width: 1200, height: 600, webPreferences: {
-      // nodeIntegrationInSubFrames: true,
-      nodeIntegration: true
-    } });
+    win = new BrowserWindow({
+      width: 1200,
+      height: 600,
+      icon: icon,
+      webPreferences: {
+        // nodeIntegrationInSubFrames: true,
+        nodeIntegration: true
+      }
+    });
     // win.setMenu(null);
 
     // and load the index.html of the app.
@@ -53,9 +81,9 @@
 
     // As suggested in https://github.com/electron/electron/issues/4068
     const inputMenu = Menu.buildFromTemplate([
-      {role: 'cut'},
-      {role: 'copy'},
-      {role: 'paste'}
+      { role: 'cut' },
+      { role: 'copy' },
+      { role: 'paste' }
     ]);
 
     win.webContents.on('context-menu', (e, props) => {
@@ -64,6 +92,16 @@
         inputMenu.popup(win);
       }
     });
+
+    const handleRedirect = (e, uri) => {
+      if (uri !== win.webContents.getURL()) {
+        e.preventDefault();
+        require('electron').shell.openExternal(uri);
+      }
+    };
+
+    // win.webContents.on('will-navigate', handleRedirect);
+    win.webContents.on('new-window', handleRedirect);
   }
 
   // This method will be called when Electron has finished

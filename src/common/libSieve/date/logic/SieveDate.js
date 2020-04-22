@@ -1,5 +1,5 @@
 /*
- * The contents of this file are licenced. You may obtain a copy of
+ * The contents of this file are licensed. You may obtain a copy of
  * the license at https://github.com/thsmi/sieve/ or request it via
  * email from the author.
  *
@@ -56,6 +56,16 @@ time-zone
 
   if (!SieveGrammar)
     throw new Error("Could not register Variables");
+
+  /**
+   * Gets the current date in yyyy-mm-dd format.
+   *
+   * @returns {string}
+   *   the current date as string
+   */
+  function getCurrentDate() {
+    return '"' + new Date().toJSON().substring(0, "yyyy-mm-dd".length) + '"';
+  }
 
   SieveGrammar.addTag({
     node: "zone/originalzone",
@@ -133,8 +143,7 @@ time-zone
       }, {
         id: "keys",
         type: "stringlist",
-        // the easiest way to get th current date in yyyy-mm-dd format
-        value: '"' + new Date().toJSON().substring(0, "yyyy-mm-dd".length) + '"'
+        value: getCurrentDate()
       }]
     }]
   });
@@ -178,7 +187,7 @@ time-zone
       }, {
         id: "keys",
         type: "stringlist",
-        value: '"' + new Date().toJSON().substring(0, "yyyy-mm-dd".length) + '"'
+        value: getCurrentDate()
       }]
     }]
   });

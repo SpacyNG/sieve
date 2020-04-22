@@ -50,15 +50,24 @@
     /**
      * Creates a Certificate Validation Exception.
      *
-     * @param {Error} error
-     *   the error which causes this exception
-     * @param {object} cert
-     *   a certificate object.
+     * @param {object} securityInfo
+     *   the security info object with details on the certificate.
      */
-    constructor(error, cert) {
-      super("Error while validating Cerificate: " + error);
-      this.error = error;
-      this.cert = cert;
+    constructor(securityInfo) {
+      super("Error while validating Certificate");
+
+      this.securityInfo = securityInfo;
+    }
+
+    /**
+     * The security Info object with detailed information
+     * on the certificate which caused this error.
+     *
+     * @returns {object}
+     *   the security info.
+     */
+    getSecurityInfo() {
+      return this.securityInfo;
     }
   }
 
@@ -74,7 +83,7 @@
      * Creates a server side exception
      *
      * @param {SieveSimpleResponse} response
-     *   the servers response which inidcated the error.
+     *   the servers response which indicated the error.
      */
     constructor(response) {
       super(response.getMessage());

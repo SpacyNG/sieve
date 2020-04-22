@@ -1,5 +1,5 @@
 /*
- * The contents of this file are licenced. You may obtain a copy of
+ * The contents of this file are licensed. You may obtain a copy of
  * the license at https://github.com/thsmi/sieve/ or request it via
  * email from the author.
  *
@@ -27,6 +27,8 @@
   class SieveAddHeaderUI extends SieveActionDialogBoxUI {
 
     /**
+     * Gets the header name
+     *
      * @returns {SieveAbstractString}
      *   the element's header field name
      */
@@ -35,6 +37,8 @@
     }
 
     /**
+     * Gets the header value
+     *
      * @returns {SieveAbstractString}
      *   the element's header value field
      */
@@ -111,6 +115,8 @@
   class SieveDeleteHeaderUI extends SieveActionDialogBoxUI {
 
     /**
+     * Gets the match type.
+     *
      * @returns {SieveAbstractElement}
      *   the element's match type
      */
@@ -119,6 +125,8 @@
     }
 
     /**
+     * Gets the comparator type.
+     *
      * @returns {SieveAbstractElement}
      *   the element's comparator type
      */
@@ -127,6 +135,8 @@
     }
 
     /**
+     * Gets the header name
+     *
      * @returns {SieveAbstractString}
      *   the element's header field name
      */

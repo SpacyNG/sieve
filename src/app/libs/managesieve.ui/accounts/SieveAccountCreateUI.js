@@ -27,7 +27,7 @@
      */
     async show() {
       return await new Promise(async (resolve) => {
-        const dialog = await (new SieveTemplateLoader()).load("./accounts/account.create.tpl");
+        const dialog = await (new SieveTemplateLoader()).load("./accounts/account.dialog.create.tpl");
         $("#container").append(dialog);
 
         dialog.find(".sieve-create-account-btn").click(async () => {
@@ -40,7 +40,7 @@
           };
 
           // fix me remove modal2 from dom.
-          await SieveIpcClient.sendMessage("account-create", account);
+          await SieveIpcClient.sendMessage("core", "account-create", account);
           dialog.modal('hide');
           resolve(true);
         });

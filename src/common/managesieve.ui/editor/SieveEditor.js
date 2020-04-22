@@ -19,16 +19,25 @@
   /* global SieveGraphicalEditorUI */
   /* global SieveTemplateLoader */
 
+  /**
+   * Implements a editor UI which contains a graphical as well as a text editor.
+   */
   class SieveEditorUI extends SieveEditorController {
 
+    /**
+     * @inheritdoc
+     */
     constructor(name, account) {
       super(name, account);
 
       this.textEditor = new SieveTextEditorUI(this);
       this.graphicalEditor = new SieveGraphicalEditorUI(this);
+      this.checksum = "";
     }
 
-
+    /**
+     *
+     */
     resize() {
       const offset = $("#sieve-widget-editor").offset().top;
 
@@ -39,17 +48,25 @@
         $(window).height() - offset - 40);
     }
 
+    /**
+     * Moves the input focus to the currently active editor.
+     */
     focus() {
       this.getCurrentEditor().focus();
     }
 
-
-
+    /**
+     * Renders the editor to screen.
+     */
     async render() {
-      await this.renderSettings();
+
+      const editor = await (new SieveTemplateLoader()).load("./editor/editor.tpl");
+      $("#sieve-editor").append(editor);
 
       await this.getTextEditor().render();
       await this.getGraphicalEditor().render();
+
+      await this.loadSettings();
 
       $("#sieve-editor-settings .sieve-editor-settings-show").click(() => {
         $("#sieve-tab-settings").tab('show');
@@ -63,7 +80,9 @@
         this.exportScript();
       });
 
-
+      $("#sieve-editor-save").click(() => {
+        this.save();
+      });
 
       $('.nav-item > a[href="#sieve-widget-editor"]').on('show.bs.tab', async (e) => {
 
@@ -125,13 +144,13 @@
     }
 
     /**
-     * Checks if the current editor has unsave changes
+     * Checks if the current editor has unsaved changes
      *
      * @returns {boolean}
      *   true in case the editor contains unsaved changes.
      */
-    hasChanged() {
-      return this.getCurrentEditor().hasChanged();
+    async hasChanged() {
+      return (await this.getCurrentEditor().getChecksum() !== this.checksum);
     }
 
     /**
@@ -143,11 +162,14 @@
      */
     async load() {
 
-      await this.getCurrentEditor().setScript(
-        await this.loadScript());
+      const editor = this.getCurrentEditor();
 
-      this.getCurrentEditor().clearHistory();
-      this.getCurrentEditor().focus();
+      await editor.setScript(await this.loadScript());
+
+      this.checksum = await editor.getChecksum();
+
+      editor.clearHistory();
+      editor.focus();
 
       return true;
     }
@@ -160,15 +182,17 @@
      */
     async save() {
 
-      if (!this.hasChanged())
+      if (!await this.hasChanged())
         return this;
 
       try {
 
-        await this.saveScript(
-          await this.getCurrentEditor().getScript());
+        const editor = this.getCurrentEditor();
 
-        this.getCurrentEditor().setChanged(false);
+        await this.saveScript(
+          await editor.getScript());
+
+        this.checksum = await editor.getChecksum();
 
         this.hideErrorMessage();
       } catch (ex) {
@@ -208,7 +232,6 @@
         return;
 
       await this.getCurrentEditor().setScript(script);
-      this.getCurrentEditor().setChanged(true);
 
       // The dialog stole our focus...
       this.getCurrentEditor().focus();
@@ -218,7 +241,7 @@
      * Exports the script to a file
      */
     async exportScript() {
-      await super.exportScript(this.getCurrentEditor().getScript());
+      await super.exportScript(await this.getCurrentEditor().getScript());
 
       // The dialog stole our focus...
       this.getCurrentEditor().focus();
@@ -226,7 +249,7 @@
 
     /**
      * Switches to the text editor.
-     * It transfers the script from the graphical to the texteditor.
+     * It transfers the script from the graphical to the text editor.
      *
      *  @returns {boolean}
      *   true in case the editor was changed otherwise false.
@@ -242,8 +265,6 @@
       // The set script would be just like an edit..
       await this.getTextEditor().setScript(
         await this.getGraphicalEditor().getScript());
-
-      this.getTextEditor().setChanged(true);
 
       this.isTextEditor(true);
 
@@ -270,7 +291,8 @@
         await this.getGraphicalEditor().setScript(
           await this.getTextEditor().getScript());
       } catch (ex) {
-        this.showErrorMessage("Switching to Graphical editor failed");
+        console.log(ex);
+        this.showErrorMessage(`Switching to Graphical editor failed ${ex}`);
         return false;
       }
 
@@ -278,6 +300,18 @@
       return true;
     }
 
+    /**
+     * Gets the currently active editor type and optionally
+     * also sets the editor type.
+     *
+     * @param {boolean} [value]
+     *  optional. If set to true the text editor will be enabled.
+     *  Setting it to false will switch to the graphical editor.
+     *
+     * @returns {boolean}
+     *   true in case the text editor is the current editor.
+     *   Otherwise false.
+     */
     isTextEditor(value) {
 
       if (value === true || value === false)
@@ -287,7 +321,7 @@
     }
 
     /**
-     * Returns a refernce to the currently active editor.
+     * Returns a reference to the currently active editor.
      * Which is either the plain text editor or the rich text editor.
      *
      * @returns {SieveAbstractEditorUI} the currently active editor.
@@ -321,10 +355,19 @@
       return this.graphicalEditor;
     }
 
+    /**
+     * Renders the current settings.
+     */
     async renderSettings() {
+
+      $("#sieve-content-settings").empty();
+
+      await this.getTextEditor().renderSettings();
+      // this.getGraphicalEditor().renderSettings();
+
       const settings = await (new SieveTemplateLoader()).load("./editor/editor.settings.defaults.tpl");
 
-      $("#sieve-content-settings").empty().append(settings);
+      $("#sieve-content-settings").append(settings);
 
       $("#editor-settings-save-defaults").click(async () => {
         await this.saveDefaultSettings();
@@ -336,15 +379,27 @@
     }
 
     /**
-     * Resets the editor to default settings
+     * @inheritdoc
+     */
+    async loadSettings() {
+      await this.getTextEditor().loadSettings();
+      await this.getGraphicalEditor().loadSettings();
+
+      await this.renderSettings();
+    }
+
+    /**
+     * @inheritdoc
      */
     async loadDefaultSettings() {
       await this.getTextEditor().loadDefaultSettings();
       await this.getGraphicalEditor().loadDefaultSettings();
+
+      await this.renderSettings();
     }
 
     /**
-     * Save the current settings as default.
+     * @inheritdoc
      */
     async saveDefaultSettings() {
       await this.getTextEditor().saveDefaultSettings();

@@ -51,7 +51,7 @@
           this.types[type] = {};
 
         if (!obj.onProbe)
-          throw new Error("Lexer Error: Registration failed, element has onPobe method");
+          throw new Error("Lexer Error: Registration failed, element has onProbe method");
 
         if (!obj.onNew)
           throw new Error("Lexer Error: Registration failed, element has onNew method");
@@ -63,7 +63,7 @@
         this.types[type][name] = obj;
 
         // TODO There should be only one probe and one create method.
-        // We should use a prefix to destinguish between types and unique names.
+        // We should use a prefix to distinguish between types and unique names.
         // this.items[name] = obj;
         // this.items["@" + type][name] = obj;
       },
@@ -111,7 +111,7 @@
        * @returns {SieveElement|null}
        *  the element which was created or null in case no matching constructor was found
        * @throws
-       *  throws an exception in case quering a constructor failed or invalid typeinformation is passed.
+       *  throws an exception in case querying a constructor failed or invalid type information is passed.
        */
       getConstructor: function (types, token) {
         if (typeof (types) === "string")
@@ -136,12 +136,12 @@
 
       /**
        * Creates a new object by calling the given constructor.
-       * It automaticially attaches the docshell to the newly created object.
+       * It automatically attaches the docshell to the newly created object.
        *
        * @param {SieveDocument} docshell
        *  the docshell which owns the new element
        * @param {object} constructor
-       *  the costructor which should be used to create the new element
+       *  the constructor which should be used to create the new element
        * @param {SieveParser} [parser]
        *  an optional initializer for the newly created object
        *
@@ -197,7 +197,7 @@
        * @param {SieveDocument} docshell
        *  the document which owns the new element
        * @param {string} name
-       *  the construtor name which should be used to create the element
+       *  the constructor name which should be used to create the element
        * @param {SieveParser} [parser]
        *   Optional, used to initialize the created element.
        *

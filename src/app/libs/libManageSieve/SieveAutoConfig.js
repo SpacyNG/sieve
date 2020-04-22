@@ -17,6 +17,8 @@
   const SIEVE_PORT_NEW = 4190;
   const SIEVE_PORT_OLD = 2000;
 
+  const LOG_LEVEL = 255;
+
   const { SieveLogger } = require("./SieveLogger.js");
   const { Sieve } = require("./SieveClient.js");
   const { SieveInitRequest } = require("./SieveRequest.js");
@@ -37,15 +39,15 @@
     constructor(hostname) {
       this.hostname = hostname;
       this.logger = new SieveLogger();
-      this.logger.level(255);
+      this.logger.level(LOG_LEVEL);
     }
 
     /**
-     * Autodetects the sieve port for all well known sieve ports.
-     * In case autodetect fails an exception is thrown.
+     * Auto detects the sieve port for all well known sieve ports.
+     * In case auto detect fails an exception is thrown.
      *
      * @returns {int}
-     *  the sieve port in case autodetect succeeds.
+     *  the sieve port in case auto detect succeeds.
      */
     async detect() {
 
@@ -59,7 +61,7 @@
     /**
      * Tries a handshake on the given port.
      * @param {int} port
-     *   the tcp port which should be challanged
+     *   the tcp port which should be challenged
      * @returns {boolean}
      *   true in case it is a manage sieve port otherwise false.
      */

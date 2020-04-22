@@ -16,7 +16,7 @@
   const { SieveAbstractLogger } = require("./SieveAbstractLogger.js");
 
   /**
-   * Implements a sieve compatilbe logger instance for node
+   * Implements a sieve compatible logger instance for node
    */
   class SieveNodeLogger extends SieveAbstractLogger {
 
@@ -28,7 +28,8 @@
       if (!this.isLoggable(level))
         return this;
 
-      console.log("[" + this.getTimestamp() + " " + this.prefix() + "] " + message);
+      // eslint-disable-next-line no-console
+      console.log(`[${this.getTimestamp()} ${this.prefix()} ] ${message}`);
       return this;
     }
   }
